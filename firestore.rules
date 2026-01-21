@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- HELPER FUNCTIONS ---
+    
+    // Checks if the user is accessing their own data
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Checks if the user is an Admin
+    // (Reads the user's profile to check if 'isAdmin' is true)
+    function isUserAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // --- COLLECTIONS ---
+
+    // 1. Users Collection
+    match /users/{userId} {
+      // READ: Admins can see ALL users (needed for Admin Panel list). 
+      // Users can only see THEMSELVES.
+      allow read: if isOwner(userId) || isUserAdmin();
+      
+      // WRITE: Users can update their own profile. Admins can update anyone.
+      // (Prevent users from making themselves admin)
+      allow create: if (isOwner(userId) || isUserAdmin()) && (!("isAdmin" in request.resource.data) || request.resource.data.isAdmin == false);
+      allow update: if (isOwner(userId) || isUserAdmin()) && request.resource.data.isAdmin == resource.data.isAdmin;
+    }
+
+    // 2. Public Data (Products & Categories)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isUserAdmin();
+    }
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isUserAdmin();
+    }
+
+    // 3. Orders (Specific User Access)
+    // Used by the main website so a user can see their own history
+    match /users/{userId}/orders/{orderId} {
+      allow read, write: if isOwner(userId) || isUserAdmin();
+    }
+    
+    // 4. Order Items (Subcollection of Orders)
+    match /users/{userId}/orders/{orderId}/orderItems/{orderItemId} {
+      allow read, write: if isOwner(userId) || isUserAdmin();
+    }
+
+    // 5. Wishlist
+    match /users/{userId}/wishlist/{productId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // 6. COLLECTION GROUP QUERIES (Crucial for Admin Panel)
+    // This allows the Admin Dashboard to fetch "All Orders" from every user at once.
+    match /{path=**}/orders/{orderId} {
+      allow read: if isUserAdmin();
+    }
+  }
+}

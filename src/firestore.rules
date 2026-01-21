@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+
+    // Returns true if the user is authenticated and their UID matches the
+    // document's ID they are trying to access.
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Returns true if the user is an admin.
+    // It checks for the existence of the user's profile document and
+    // that the 'isAdmin' field within that document is a boolean 'true'.
+    function isUserAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+
+    // --- Collection Rules ---
+
+    // Products: Publicly readable, but only an admin can create, update, or delete.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isUserAdmin();
+    }
+    
+    // Categories: Publicly readable. No one can write to them.
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if false; 
+    }
+
+    // Users: Handles permissions for both admins and regular users.
+    match /users/{userId} {
+      // Admins can list the entire collection.
+      allow list: if isUserAdmin();
+      
+      // An admin can get any user's document, and a regular user can get their own.
+      allow get: if isUserAdmin() || isOwner(userId);
+      
+      // WRITE permissions:
+      // - A user can create their own document, but cannot set themselves as admin.
+      // - A regular user can update their own profile, but cannot change their admin status.
+      allow create: if isOwner(userId) && (!("isAdmin" in request.resource.data) || request.resource.data.isAdmin == false);
+      allow update: if (isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin) || isUserAdmin();
+      allow delete: if isUserAdmin();
+    }
+    
+    // Orders (Collection Group Query for Admin Panel)
+    // This allows an admin to perform a collection group query to read and update ANY order
+    // across ALL users. This is essential for the main "Orders" page in the admin panel.
+    match /{path=**}/orders/{orderId} {
+        allow read, update: if isUserAdmin();
+    }
+    
+    // Orders (Direct access for Regular Users on the main website)
+    // A regular user can read and write to their own orders, but not see anyone else's.
+    match /users/{userId}/orders/{orderId} {
+      allow read, write: if isOwner(userId) || isUserAdmin();
+    }
+
+    // Wishlist: A regular user can manage their own wishlist.
+    match /users/{userId}/wishlist/{productId} {
+      allow read, write: if isOwner(userId);
+    }
+  }
+}

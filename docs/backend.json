@@ -1,0 +1,295 @@
+{
+  "entities": {
+    "Product": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Product",
+      "type": "object",
+      "description": "Represents a product in the e-commerce store.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the product."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the product."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the product."
+        },
+        "price": {
+          "type": "number",
+          "description": "Price of the product."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the product.",
+          "enum": [
+            "Necklaces",
+            "Earrings",
+            "Pendants",
+            "Rings",
+            "Bangles/bracelets",
+            "Nosepin",
+            "Chokers",
+            "Silver Accessories/Gift Corner",
+            "Maang Tikka",
+            "Diamond Jewellery"
+          ]
+        },
+        "imageUrls": {
+          "type": "array",
+          "description": "URLs of the product images.",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "availability": {
+          "type": "string",
+          "description": "Availability status of the product (READY TO SHIP or MADE TO ORDER)."
+        },
+        "type": {
+          "type": "string",
+          "description": "The metal type of the product (gold or silver)."
+        },
+        "sizes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Sizes of the product, applicable to Rings."
+        },
+        "stockQuantity": {
+          "type": "number",
+          "description": "The available stock quantity of the product."
+        },
+        "isBestseller": {
+          "type": "boolean",
+          "description": "Indicates if the product is a bestseller."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "price",
+        "category",
+        "imageUrls",
+        "availability",
+        "type"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents a customer order.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the order."
+        },
+        "customer": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "email": { "type": "string", "format": "email" }
+          }
+        },
+        "orderDate": {
+          "type": "string",
+          "description": "Date when the order was placed.",
+          "format": "date-time"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total amount of the order."
+        },
+        "orderStatus": {
+          "type": "string",
+          "description": "Current status of the order (Pending, Processing, Shipped, Delivered, Cancelled).",
+          "enum": [
+            "Pending",
+            "Processing",
+            "Shipped",
+            "Delivered",
+            "Cancelled"
+          ]
+        },
+        "shippingAddress": {
+          "$ref": "#/entities/Address",
+          "description": "The shipping address for the order."
+        },
+        "billingAddress": {
+          "$ref": "#/entities/Address",
+          "description": "The billing address for the order."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "The payment method used."
+        },
+        "stockDecremented": {
+          "type": "boolean",
+          "description": "Indicates if the stock for items in this order has been decremented."
+        }
+      },
+      "required": [
+        "id",
+        "customer",
+        "orderDate",
+        "totalAmount",
+        "orderStatus"
+      ]
+    },
+    "Customer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Customer",
+      "type": "object",
+      "description": "Represents a customer.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the customer."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "First name of the customer."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "Last name of the customer."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the customer.",
+          "format": "email"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "Indicates if the customer has admin privileges."
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number of the customer."
+        },
+        "address": {
+          "$ref": "#/entities/Address",
+          "description": "Primary address of the customer."
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email"
+      ]
+    },
+    "Category": {
+      "title": "Category",
+      "type": "object",
+      "description": "Represents a product category.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the category."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the category."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "Address": {
+      "title": "Address",
+      "type": "object",
+      "description": "Represents a physical address.",
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "zip": { "type": "string" },
+        "country": { "type": "string" }
+      },
+      "required": ["street", "city", "state", "zip", "country"]
+    },
+    "OrderItem": {
+      "title": "Order Item",
+      "type": "object",
+      "description": "Represents a single item within an order.",
+      "properties": {
+        "productId": {
+          "type": "string",
+          "description": "The ID of the product."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the product at the time of purchase."
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The quantity of this item ordered."
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of a single unit of this item at the time of purchase."
+        }
+      },
+      "required": [
+        "productId",
+        "name",
+        "quantity",
+        "price"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": {
+        "$ref": "#/entities/Product"
+      },
+      "description": "Collection to store all products."
+    },
+    "/bestsellers/{productId}": {
+      "schema": {
+        "$ref": "#/entities/Product"
+      },
+      "description": "Collection to store bestselling products."
+    },
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/Customer"
+      },
+      "description": "Collection to store customer data."
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/Order"
+      },
+      "description": "Sub-collection to store a user's orders."
+    },
+    "/users/{userId}/orders/{orderId}/orderItems/{orderItemId}": {
+      "schema": {
+        "$ref": "#/entities/OrderItem"
+      },
+      "description": "Sub-collection to store items for a specific order."
+    },
+    "/categories/{categoryId}": {
+      "schema": {
+        "$ref": "#/entities/Category"
+      },
+      "description": "Collection to store product categories."
+    }
+  }
+}
