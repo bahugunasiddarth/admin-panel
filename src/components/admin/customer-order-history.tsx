@@ -1,8 +1,11 @@
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query } from 'firebase/firestore';
-import type { OrderStatus } from '@/lib/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -11,82 +14,87 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import type { Customer, Order } from '@/lib/types';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
+import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { useMemo } from 'react';
 
-export function CustomerOrderHistory({ customerId }: { customerId: string }) {
+interface CustomerOrderHistoryProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customer: Customer | null;
+}
+
+export function CustomerOrderHistory({ open, onOpenChange, customer }: CustomerOrderHistoryProps) {
   const firestore = useFirestore();
 
   const ordersQuery = useMemoFirebase(() => {
-    if (!firestore || !customerId) return null;
-    return query(collection(firestore, 'users', customerId, 'orders'));
-  }, [firestore, customerId]);
+    if (!firestore || !customer) return null;
+    // Fetches orders from the user's subcollection: users/{userId}/orders
+    return query(
+      collection(firestore, 'users', customer.id, 'orders'),
+      orderBy('orderDate', 'desc')
+    );
+  }, [firestore, customer]);
 
-  const { data: rawOrders, isLoading } = useCollection<any>(ordersQuery);
-
-  const orders = useMemo(() => {
-    if (!rawOrders) return [];
-    
-    // Normalize and sort orders
-    const sortedOrders = [...rawOrders].sort((a, b) => {
-        const dateA = (a.orderDate || a.order_date)?.toDate()?.getTime() || 0;
-        const dateB = (b.orderDate || b.order_date)?.toDate()?.getTime() || 0;
-        return dateB - dateA;
-    });
-
-    return sortedOrders.map(o => ({
-      id: o.id,
-      orderId: o.orderId || o.id,
-      orderDate: o.orderDate || o.order_date,
-      orderStatus: o.orderStatus || o.status,
-      totalAmount: o.totalAmount || o.total_amount,
-    }));
-  }, [rawOrders]);
-
-  const getStatusBadgeVariant = (status: OrderStatus) => {
-    switch (status) {
-      case 'Pending': return 'secondary';
-      case 'Processing': return 'secondary';
-      case 'Shipped': return 'default';
-      case 'Delivered': return 'outline';
-      case 'Cancelled': return 'destructive';
-      default: return 'secondary';
-    }
-  };
-
-  if (isLoading) {
-    return <div className="flex items-center justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div>;
-  }
-
-  if (!orders || orders.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">No order history for this customer.</p>;
-  }
+  const { data: orders, isLoading } = useCollection<Order>(ordersQuery);
 
   return (
-    <div className="p-4 bg-muted/50">
-        <h4 className="font-bold mb-2 text-sm">Order History</h4>
-        <Table>
-            <TableHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Order History: {customer?.firstName} {customer?.lastName}</DialogTitle>
+        </DialogHeader>
+        
+        {isLoading ? (
+           <div className="flex justify-center p-8">
+             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+           </div>
+        ) : !orders || orders.length === 0 ? (
+           <div className="text-center py-8">
+             <p className="text-muted-foreground">No orders found for this customer.</p>
+           </div>
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                    <TableHead>Order ID</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Order Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
                 </TableRow>
-            </TableHeader>
-            <TableBody>
-                {orders.map(order => (
-                    <TableRow key={order.id}>
-                        <TableCell className="font-medium">#{(order.orderId).slice(0, 6).toUpperCase()}</TableCell>
-                        <TableCell>{order.orderDate ? format(order.orderDate.toDate(), 'PP') : 'N/A'}</TableCell>
-                        <TableCell><Badge variant={getStatusBadgeVariant(order.orderStatus)}>{order.orderStatus}</Badge></TableCell>
-                        <TableCell className="text-right">₹{(order.totalAmount || 0).toFixed(2)}</TableCell>
-                    </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-mono">
+                      #{order.orderId ? order.orderId.slice(0, 8).toUpperCase() : order.id.slice(0, 8).toUpperCase()}
+                    </TableCell>
+                    <TableCell>
+                      {order.orderDate ? format(order.orderDate.toDate(), 'MMM d, yyyy') : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        order.orderStatus === 'Delivered' ? 'default' : 
+                        order.orderStatus === 'Cancelled' ? 'destructive' : 
+                        'secondary'
+                      }>
+                        {order.orderStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      ₹{(order.totalAmount || 0).toFixed(2)}
+                    </TableCell>
+                  </TableRow>
                 ))}
-            </TableBody>
-        </Table>
-    </div>
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
