@@ -1,102 +1,178 @@
 'use client';
 
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import type { Order, OrderItemDoc } from '@/lib/types';
 
-// Extend the jsPDF type to include the autoTable method
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
+// Helper to safely parse numbers from strings/numbers
+const parseNumber = (val: any): number => {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    const clean = val.replace(/[^\d.-]/g, '');
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
   }
-}
+  return 0;
+};
+
+// Helper to format addresses safely (handles strings vs objects)
+const formatAddress = (addr: any, name: string) => {
+    const lines = [name];
+    
+    if (!addr) {
+        lines.push('N/A');
+    } else if (typeof addr === 'string') {
+        lines.push(addr);
+    } else {
+        // Handle object safely
+        if (addr.street || addr.addressLine1 || addr.line1) 
+            lines.push(addr.street || addr.addressLine1 || addr.line1);
+        
+        const cityStateZip = [
+            addr.city || addr.town,
+            addr.state || addr.province || addr.region,
+            addr.zip || addr.postalCode || addr.pincode
+        ].filter(Boolean).join(', ');
+        
+        if (cityStateZip) lines.push(cityStateZip);
+        if (addr.country) lines.push(addr.country);
+    }
+    return lines.join('\n');
+};
 
 export function generateInvoicePdf(order: Order, items: OrderItemDoc[]) {
   const doc = new jsPDF();
 
-  // Header
-  doc.setFontSize(20);
+  // --- 1. HEADER ---
+  doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text('Invoice', 14, 22);
+  doc.setTextColor(40, 40, 40);
+  doc.text('TAX INVOICE', 14, 20);
+
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Gleaming Admin', 14, 30);
+  doc.setTextColor(100, 100, 100);
+  doc.text('Gleaming Admin', 14, 26);
+  doc.text('contact@gleaming.com', 14, 30); 
 
-  // Order Details
-  const orderId = order.orderId ? order.orderId.slice(0, 6).toUpperCase() : order.id.slice(0, 6).toUpperCase();
+  // --- 2. INVOICE DETAILS ---
+  const orderId = order.orderId ? order.orderId.toUpperCase() : order.id.slice(0, 8).toUpperCase();
   const orderDate = order.orderDate ? format(order.orderDate.toDate(), 'PPP') : 'N/A';
-  doc.text(`Invoice #: ${orderId}`, 196, 22, { align: 'right' });
-  doc.text(`Date: ${orderDate}`, 196, 30, { align: 'right' });
-  
-  doc.setLineWidth(0.1);
-  doc.line(14, 35, 196, 35);
 
-  // Addresses
-  doc.setFontSize(12);
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  const rightX = 196;
+  doc.text(`Invoice No: #${orderId}`, rightX, 20, { align: 'right' });
+  doc.text(`Date: ${orderDate}`, rightX, 25, { align: 'right' });
+  doc.text(`Status: ${order.orderStatus}`, rightX, 30, { align: 'right' });
+
+  // Divider
+  doc.setDrawColor(200, 200, 200);
+  doc.line(14, 38, 196, 38);
+
+  // --- 3. ADDRESSES ---
+  const yAddr = 48;
+  
+  // Billing
   doc.setFont('helvetica', 'bold');
-  doc.text('Bill To:', 14, 45);
+  doc.setFontSize(11);
+  doc.text('Billed To:', 14, yAddr);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  
+  const billingText = formatAddress(order.billingAddress, order.customer.name);
+  doc.text(billingText, 14, yAddr + 6);
 
-  const billingAddress = order.billingAddress;
-  const billingAddressText = [
-    order.customer.name,
-    billingAddress?.street,
-    `${billingAddress?.city || ''}, ${billingAddress?.state || ''} ${billingAddress?.zip || ''}`,
-    billingAddress?.country
-  ].filter(Boolean).join('\n');
-  doc.text(billingAddressText, 14, 52);
-
-  doc.setFontSize(12);
+  // Shipping
   doc.setFont('helvetica', 'bold');
-  doc.text('Ship To:', 110, 45);
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Shipped To:', 110, yAddr);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  
-  const shippingAddress = order.shippingAddress;
-  const shippingAddressText = [
-    order.customer.name,
-    shippingAddress?.street,
-    `${shippingAddress?.city || ''}, ${shippingAddress?.state || ''} ${shippingAddress?.zip || ''}`,
-    shippingAddress?.country
-  ].filter(Boolean).join('\n');
-  doc.text(shippingAddressText, 110, 52);
+  doc.setTextColor(80, 80, 80);
 
-  // Items Table
-  const tableBody = items.map(item => {
-      const price = item.price || 0;
-      const quantity = item.quantity || 0;
+  const shippingText = formatAddress(order.shippingAddress, order.customer.name);
+  doc.text(shippingText, 110, yAddr + 6);
+
+  // --- 4. ITEMS TABLE with GST ---
+  let totalTax = 0;
+  let subTotalBeforeTax = 0;
+
+  const tableBody = items.map((item: any) => {
+      // Robust field checking
+      const price = parseNumber(item.price || item.unitPrice || item.amount || 0);
+      const quantity = parseNumber(item.quantity || item.qty || 0);
+      
+      // GST Logic (Default 3% for Jewelry if not present)
+      let gstPercent = 0;
+      if (item.gst || item.tax) {
+          gstPercent = parseNumber(item.gst || item.tax);
+      } else if (item.type === 'gold' || item.type === 'silver') {
+          gstPercent = 3;
+      }
+      
+      const baseTotal = price * quantity;
+      const taxAmount = (baseTotal * gstPercent) / 100;
+      const totalItem = baseTotal + taxAmount;
+
+      subTotalBeforeTax += baseTotal;
+      totalTax += taxAmount;
+
       return [
-          item.name,
+          item.name || 'Item',
           quantity,
-          `₹${price.toFixed(2)}`,
-          `₹${(price * quantity).toFixed(2)}`
+          `Rs. ${price.toFixed(2)}`,
+          `${gstPercent}%`,
+          `Rs. ${taxAmount.toFixed(2)}`,
+          `Rs. ${totalItem.toFixed(2)}`
       ];
   });
 
-  doc.autoTable({
-    startY: 80,
-    head: [['Item', 'Quantity', 'Unit Price', 'Subtotal']],
+  // Generate Table
+  autoTable(doc, {
+    startY: 85,
+    head: [['Item', 'Qty', 'Unit Price', 'GST %', 'GST Amt', 'Total']],
     body: tableBody,
-    theme: 'striped',
-    headStyles: { fillColor: [41, 128, 185] },
+    theme: 'grid',
+    headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: 'bold' },
+    columnStyles: {
+        0: { cellWidth: 'auto' }, 
+        1: { halign: 'center' },
+        2: { halign: 'right' },
+        3: { halign: 'center' },
+        4: { halign: 'right' },
+        5: { halign: 'right', fontStyle: 'bold' },
+    },
+    styles: { fontSize: 9, cellPadding: 3 },
   });
 
-  // Total
-  const finalY = (doc as any).lastAutoTable.finalY || 100;
+  // --- 5. TOTALS SUMMARY ---
+  const finalY = (doc as any).lastAutoTable.finalY + 10;
+  const summaryX = 140; 
+  const valueX = 196;
+
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+
+  doc.text('Subtotal:', summaryX, finalY);
+  doc.text(`Rs. ${subTotalBeforeTax.toFixed(2)}`, valueX, finalY, { align: 'right' });
+
+  doc.text('Total GST:', summaryX, finalY + 6);
+  doc.text(`Rs. ${totalTax.toFixed(2)}`, valueX, finalY + 6, { align: 'right' });
+
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('Total:', 150, finalY + 10, { align: 'left' });
-  doc.text(`₹${(order.totalAmount || 0).toFixed(2)}`, 196, finalY + 10, { align: 'right' });
-  
-  // Footer
-  doc.setLineWidth(0.1);
-  doc.line(14, doc.internal.pageSize.height - 30, 196, doc.internal.pageSize.height - 30);
-  doc.setFontSize(10);
-  doc.text('Thank you for your business!', 105, doc.internal.pageSize.height - 20, { align: 'center' });
+  doc.text('Grand Total:', summaryX, finalY + 14);
+  doc.text(`Rs. ${(subTotalBeforeTax + totalTax).toFixed(2)}`, valueX, finalY + 14, { align: 'right' });
 
+  // --- 6. FOOTER ---
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(120, 120, 120);
+  doc.text('Thank you for your business!', 105, doc.internal.pageSize.height - 15, { align: 'center' });
 
-  // Save the PDF
-  doc.save(`invoice-${orderId}.pdf`);
+  doc.save(`invoice_${orderId}.pdf`);
 }
