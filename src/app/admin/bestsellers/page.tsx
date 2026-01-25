@@ -22,14 +22,24 @@ export default function BestsellersPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
 
+  // CHANGE: Query 'products' collection where isBestseller == true
+  // This ensures we see the LIVE stock, not the stale bestsellers collection.
   const goldProductsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'bestsellers'), where('type', '==', 'gold'));
+    return query(
+        collection(firestore, 'products'), 
+        where('type', '==', 'gold'),
+        where('isBestseller', '==', true)
+    );
   }, [firestore]);
 
   const silverProductsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'bestsellers'), where('type', '==', 'silver'));
+    return query(
+        collection(firestore, 'products'), 
+        where('type', '==', 'silver'),
+        where('isBestseller', '==', true)
+    );
   }, [firestore]);
 
   const { data: goldProducts, isLoading: isLoadingGold } = useCollection<Product>(goldProductsQuery);

@@ -32,6 +32,7 @@ import { OrderItems } from './order-items';
 import { InvoiceButton } from './invoice-button';
 import { Separator } from '@/components/ui/separator';
 import { OrderStatusSelect } from './order-status-select';
+import { Input } from '@/components/ui/input';
 
 
 type ActionState = 
@@ -41,6 +42,7 @@ type ActionState =
 
 export function OrderTable({ orders }: { orders: Order[] }) {
   const [activeAction, setActiveAction] = useState<ActionState>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!activeAction) {
@@ -71,11 +73,31 @@ export function OrderTable({ orders }: { orders: Order[] }) {
     return addr[key] || addr[key.charAt(0).toUpperCase() + key.slice(1)] || addr[key.toUpperCase()] || '';
   };
 
+  const filteredOrders = orders.filter(order => {
+      const searchLower = searchQuery.toLowerCase();
+      const orderId = order.orderId || order.id || '';
+      const customerName = order.customer?.name || '';
+      const customerEmail = order.customer?.email || '';
+
+      return (
+          orderId.toLowerCase().includes(searchLower) ||
+          customerName.toLowerCase().includes(searchLower) ||
+          customerEmail.toLowerCase().includes(searchLower)
+      );
+  });
+
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>All Orders</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle className="text-xl font-bold">All Orders</CardTitle>
+          <div className="w-full max-w-sm">
+             <Input 
+                placeholder="Search by ID, name or email..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+             />
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -90,14 +112,14 @@ export function OrderTable({ orders }: { orders: Order[] }) {
                 <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
-              {orders.length === 0 ? (
+              {filteredOrders.length === 0 ? (
                 <TableBody>
                   <TableRow>
                     <TableCell colSpan={7} className="text-center h-24">No orders found.</TableCell>
                   </TableRow>
                 </TableBody>
               ) : (
-              orders.map((order) => (
+              filteredOrders.map((order) => (
                 <Collapsible asChild key={order.id}>
                     <tbody className="group/collapsible [&_tr:last-child]:border-0">
                       <TableRow>

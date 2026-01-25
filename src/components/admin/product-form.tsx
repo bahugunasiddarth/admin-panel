@@ -79,11 +79,12 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
       availability: 'READY TO SHIP',
       sizes: '',
       stockQuantity: 0,
-      isBestseller: isBestsellerOnly, // Default to true if in bestseller mode
+      isBestseller: isBestsellerOnly,
     },
   });
 
   const category = form.watch('category');
+  const availability = form.watch('availability'); // Watch availability to toggle stock input
 
   useEffect(() => {
     if (open) {
@@ -131,7 +132,8 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
         availability: data.availability,
         type: type,
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(Boolean) : [],
-        stockQuantity: data.stockQuantity,
+        // Force stock to 0 if Made to Order, effectively removing stock logic for it
+        stockQuantity: data.availability === 'MADE TO ORDER' ? 0 : data.stockQuantity,
         isBestseller: data.isBestseller,
       };
       
@@ -139,25 +141,15 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
         const batch = writeBatch(firestore);
         
         if (isBestsellerOnly) {
-           // --- FIX: DUAL WRITE LOGIC ---
-           // When creating a Bestseller, force it to exist in 'products' too.
-           // This ensures checkout works correctly.
-
            const finalData = { ...productData, isBestseller: true };
-           
-           // If editing, use existing ID. If new, generate a new ID from products collection.
            const docId = product ? product.id : doc(collection(firestore, 'products')).id;
-
            const bestsellerRef = doc(firestore, 'bestsellers', docId);
            const productRef = doc(firestore, 'products', docId);
 
-           // Use merge: true to avoid overwriting unrelated fields if they exist
            batch.set(bestsellerRef, { ...finalData, id: docId }, { merge: true });
            batch.set(productRef, { ...finalData, id: docId }, { merge: true });
 
         } else {
-          // --- STANDARD LOGIC (Products Page) ---
-          
           if (product) { // Editing
             const productDocRef = doc(firestore, 'products', product.id);
             const bestsellerDocRef = doc(firestore, 'bestsellers', product.id);
@@ -257,19 +249,22 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
                     </FormItem>
                 )}
                 />
-                 <FormField
-                    control={form.control}
-                    name="stockQuantity"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Stock Quantity</FormLabel>
-                        <FormControl>
-                            <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                 />
+                 {/* CRITICAL: ONLY SHOW STOCK INPUT FOR READY TO SHIP */}
+                 {availability === 'READY TO SHIP' && (
+                     <FormField
+                        control={form.control}
+                        name="stockQuantity"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Stock Quantity</FormLabel>
+                            <FormControl>
+                                <Input type="number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                     />
+                 )}
             </div>
             <FormField
               control={form.control}

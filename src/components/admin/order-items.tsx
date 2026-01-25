@@ -8,7 +8,11 @@ import { useEffect, useState } from 'react';
 import type { OrderItemDoc } from '@/lib/types';
 
 // The type for the item object used in the component, including the id/path added by useCollection
-type OrderItem = OrderItemDoc & { id: string; path: string };
+type OrderItem = OrderItemDoc & { 
+    id: string; 
+    path: string;
+    status?: string; // Add status field
+};
 
 
 // A more robust component to handle individual item rows and price/stock lookups
@@ -62,7 +66,13 @@ function OrderItemRow({ item }: { item: OrderItem }) {
 
     return (
         <TableRow>
-            <TableCell className="font-medium">{item.name}</TableCell>
+            <TableCell className="font-medium">
+                <div>{item.name}</div>
+                {/* Show Item Status (Ready to Ship / Made to Order) */}
+                <div className="text-xs text-muted-foreground mt-1 font-normal">
+                    {item.status || 'READY TO SHIP'}
+                </div>
+            </TableCell>
             <TableCell className="text-center">{quantity}</TableCell>
             <TableCell className="hidden text-right sm:table-cell">
                 ₹{price.toFixed(2)}
@@ -111,7 +121,7 @@ export function OrderItems({ userId, orderId }: { userId: string, orderId: strin
             </TableHeader>
             <TableBody>
                 {items.map((item) => (
-                   <OrderItemRow key={item.id} item={item} />
+                   <OrderItemRow key={item.id} item={item as OrderItem} />
                 ))}
             </TableBody>
         </Table>
