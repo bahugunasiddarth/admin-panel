@@ -33,7 +33,6 @@ type ActionState =
 export function CustomerTable({ customers }: { customers: Customer[] }) {
   const [activeAction, setActiveAction] = useState<ActionState>(null);
 
-  // Safety valve for pointer-events issues with Dialogs
   useEffect(() => {
     if (!activeAction) {
       setTimeout(() => {
@@ -52,12 +51,13 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
   const formatAddress = (addr: any) => {
     if (!addr) return 'N/A';
     if (typeof addr === 'string') return addr;
-    // Handle potential casing differences
+    
+    // UPDATED: Handle billingAddress structure (streetAddress, pinCode)
     const parts = [
-        addr.street || addr.Street,
+        addr.street || addr.Street || addr.streetAddress, // Added streetAddress
         addr.city || addr.City,
         addr.state || addr.State,
-        addr.zip || addr.Zip,
+        addr.zip || addr.Zip || addr.pinCode, // Added pinCode
         addr.country || addr.Country
     ].filter(Boolean);
     return parts.length > 0 ? parts.join(', ') : 'N/A';
@@ -143,7 +143,6 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
         </Table>
       </div>
 
-      {/* Dialogs */}
       <CustomerFormDialog
         open={activeAction?.type === 'edit'}
         onOpenChange={handleDialogClose}

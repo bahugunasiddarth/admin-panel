@@ -27,9 +27,10 @@ export default function CustomersPage() {
       lastName: c.lastName || c.last_name,
       email: c.email,
       isAdmin: c.isAdmin,
-      // Check for common variations of phone and address fields
-      phone: c.phone || c.phoneNumber || c.phone_number,
-      address: c.address,
+      // UPDATED: Check billingAddress for phone
+      phone: c.phone || c.phoneNumber || c.phone_number || c.billingAddress?.phone,
+      // UPDATED: Check billingAddress for address
+      address: c.address || c.billingAddress,
     }));
   }, [rawCustomers]);
 

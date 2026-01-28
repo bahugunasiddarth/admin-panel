@@ -17,10 +17,20 @@ export type Product = {
   slug: string;
   category: string;
   description: string;
-  material: 'Gold' | 'Silver'; // This fixes the 'material' error
+  material: 'Gold' | 'Silver'; 
   isBestseller?: boolean;
-  priceOnRequest?: boolean;    // This fixes the 'priceOnRequest' error
-  sizes?: string[];            // Ensure sizes is typed if used
+  priceOnRequest?: boolean;    
+  sizes?: string[];            
+};
+
+export type Customer = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  address?: any; 
+  isAdmin?: boolean;
 };
 
 export type Category = {

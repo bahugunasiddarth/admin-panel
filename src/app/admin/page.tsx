@@ -23,7 +23,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
 
-
+// ... (Keep existing chart configs) ...
 const revenueChartConfig = {
   total: {
     label: 'Revenue',
@@ -38,15 +38,14 @@ const orderChartConfig = {
   },
 } satisfies ChartConfig;
 
-
 export default function DashboardPage() {
   const firestore = useFirestore();
 
-  // State for date filtering
+  // ... (Keep existing state: date, activeFilter) ...
   const [date, setDate] = useState<DateRange | undefined>();
   const [activeFilter, setActiveFilter] = useState<string>('all_time');
 
-  // Queries
+  // ... (Keep existing queries and data fetching) ...
   const productsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'products');
@@ -62,11 +61,11 @@ export default function DashboardPage() {
     return query(collectionGroup(firestore, 'orders'));
   }, [firestore]);
   
-  // Data fetching
   const { data: products, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
   const { data: users, isLoading: isLoadingUsers } = useCollection<Customer>(usersQuery);
   const { data: allOrders, isLoading: isLoadingOrders } = useCollection<any>(ordersQuery);
 
+  // ... (Keep handleFilterChange and handleDateSelect) ...
   const handleFilterChange = (filter: string) => {
     setActiveFilter(filter);
     const now = new Date();
@@ -86,14 +85,14 @@ export default function DashboardPage() {
     }
   };
 
+  // ... (Keep filteredOrders logic) ...
   const filteredOrders = useMemo(() => {
     if (!allOrders) return [];
-    if (!date?.from) return allOrders; // No filter, return all
+    if (!date?.from) return allOrders; 
 
     const from = date.from;
-    const to = date.to || date.from; // if only `from` is selected, `to` is the same day.
+    const to = date.to || date.from; 
 
-    // Set to to end of day for proper comparison
     const toEndOfDay = new Date(to);
     toEndOfDay.setHours(23, 59, 59, 999);
 
@@ -104,6 +103,19 @@ export default function DashboardPage() {
     });
   }, [allOrders, date]);
 
+  // --- CHANGED: Extract city from string address ---
+  const extractCity = (address: any) => {
+    if (!address) return 'N/A';
+    if (typeof address === 'string') {
+        // Assuming format: "Street, City, State Zip, Country"
+        const parts = address.split(',');
+        if (parts.length >= 2) {
+            return parts[1].trim(); // Return the second part as City
+        }
+        return address.substring(0, 15) + '...'; // Fallback
+    }
+    return address.city || 'N/A';
+  };
 
   const recentOrders = useMemo(() => {
     if (!allOrders || !users) return [];
@@ -125,20 +137,25 @@ export default function DashboardPage() {
         };
     });
 
-    // Sort by date descending and take the first 5
     return [...enrichedOrders]
       .sort((a, b) => (b.orderDate?.toDate()?.getTime() || 0) - (a.orderDate?.toDate()?.getTime() || 0))
       .slice(0, 5);
   }, [allOrders, users]);
 
+  // --- CHANGED: Filter out MADE TO ORDER items from Low Stock ---
   const lowStockProducts = useMemo(() => {
     if (!products) return [];
     return products
-      .filter(p => p.stockQuantity !== undefined && p.stockQuantity < 10)
+      .filter(p => 
+        p.stockQuantity !== undefined && 
+        p.stockQuantity < 10 && 
+        p.availability !== 'MADE TO ORDER' // Added this condition
+      )
       .sort((a, b) => (a.stockQuantity || 0) - (b.stockQuantity || 0))
       .slice(0, 5);
   }, [products]);
 
+  // ... (Keep stats, weeklyRevenueData, weeklyOrderData, getInitials) ...
   const stats = useMemo(() => {
     const totalRevenue = filteredOrders?.reduce((acc, order) => acc + (order.totalAmount || 0), 0) || 0;
     const completedOrders = filteredOrders?.filter(order => (order.orderStatus || order.status) === 'Delivered').length || 0;
@@ -154,20 +171,17 @@ export default function DashboardPage() {
       pendingOrders,
     };
   }, [products, users, filteredOrders, date]);
-  
+
   const weeklyRevenueData = useMemo(() => {
     if (!allOrders) return [];
     
     const data: { [key: string]: { name: string; total: number } } = {};
-    
-    // Initialize the last 7 days in chronological order
     for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const dayKey = format(d, 'yyyy-MM-dd');
         data[dayKey] = { name: format(d, 'EEE'), total: 0 };
     }
-
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
@@ -177,29 +191,22 @@ export default function DashboardPage() {
             const date = order.orderDate.toDate();
             if (date >= sevenDaysAgo) {
                 const dayKey = format(date, 'yyyy-MM-dd');
-                if (data[dayKey]) {
-                    data[dayKey].total += order.totalAmount || 0;
-                }
+                if (data[dayKey]) data[dayKey].total += order.totalAmount || 0;
             }
         }
     });
-    
     return Object.values(data);
   }, [allOrders]);
 
   const weeklyOrderData = useMemo(() => {
     if (!allOrders) return [];
-    
     const data: { [key: string]: { name: string; total: number } } = {};
-    
-    // Initialize the last 7 days in chronological order
     for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const dayKey = format(d, 'yyyy-MM-dd');
         data[dayKey] = { name: format(d, 'EEE'), total: 0 };
     }
-
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
@@ -209,13 +216,10 @@ export default function DashboardPage() {
             const date = order.orderDate.toDate();
             if (date >= sevenDaysAgo) {
                 const dayKey = format(date, 'yyyy-MM-dd');
-                if (data[dayKey]) {
-                    data[dayKey].total += 1;
-                }
+                if (data[dayKey]) data[dayKey].total += 1;
             }
         }
     });
-    
     return Object.values(data);
   }, [allOrders]);
 
@@ -237,10 +241,11 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* ... (Keep Header and Stats Cards exactly as they were) ... */}
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">Dashboard</h1>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <Button variant={activeFilter === 'all_time' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('all_time')}>All Time</Button>
+             <Button variant={activeFilter === 'all_time' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('all_time')}>All Time</Button>
             <Button variant={activeFilter === 'today' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('today')}>Today</Button>
             <Button variant={activeFilter === 'week' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('week')}>This Week</Button>
             <Button variant={activeFilter === 'month' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('month')}>This Month</Button>
@@ -255,34 +260,20 @@ export default function DashboardPage() {
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {date?.from ? (
-                            date.to ? (
-                                <>
-                                    {format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}
-                                </>
-                            ) : (
-                                format(date.from, "LLL dd, y")
-                            )
-                        ) : (
-                            <span>Custom Range</span>
-                        )}
+                            date.to ? <>{format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}</> : format(date.from, "LLL dd, y")
+                        ) : <span>Custom Range</span>}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={date?.from}
-                        selected={date}
-                        onSelect={handleDateSelect}
-                        numberOfMonths={2}
-                    />
+                    <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={handleDateSelect} numberOfMonths={2} />
                 </PopoverContent>
             </Popover>
         </div>
       </div>
       
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-        <Card>
+         {/* ... (Keep Stats Cards) ... */}
+         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
             <IndianRupee className="h-4 w-4 text-muted-foreground" />
@@ -345,6 +336,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* ... (Keep Charts) ... */}
         <Card>
             <CardHeader>
                 <CardTitle>Sales Overview</CardTitle>
@@ -354,25 +346,9 @@ export default function DashboardPage() {
                  <ChartContainer config={revenueChartConfig} className="w-full h-full">
                     <BarChart accessibilityLayer data={weeklyRevenueData}>
                         <CartesianGrid vertical={false} />
-                        <XAxis
-                            dataKey="name"
-                            tickLine={false}
-                            tickMargin={10}
-                            axisLine={false}
-                        />
-                        <YAxis
-                            tickFormatter={(value) => `₹${value / 1000}k`}
-                            tickLine={false}
-                            axisLine={false}
-                            width={80}
-                        />
-                        <ChartTooltip
-                            cursor={false}
-                            content={<ChartTooltipContent 
-                                formatter={(value) => `₹${Number(value).toLocaleString()}`}
-                                indicator="dot" 
-                            />}
-                        />
+                        <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
+                        <YAxis tickFormatter={(value) => `₹${value / 1000}k`} tickLine={false} axisLine={false} width={80} />
+                        <ChartTooltip cursor={false} content={<ChartTooltipContent formatter={(value) => `₹${Number(value).toLocaleString()}`} indicator="dot" />} />
                         <Bar dataKey="total" fill="var(--color-total)" radius={4} />
                     </BarChart>
                 </ChartContainer>
@@ -387,26 +363,9 @@ export default function DashboardPage() {
                  <ChartContainer config={orderChartConfig} className="w-full h-full">
                     <BarChart accessibilityLayer data={weeklyOrderData}>
                         <CartesianGrid vertical={false} />
-                        <XAxis
-                            dataKey="name"
-                            tickLine={false}
-                            tickMargin={10}
-                            axisLine={false}
-                        />
-                        <YAxis
-                            tickFormatter={(value) => `${value}`}
-                            allowDecimals={false}
-                            tickLine={false}
-                            axisLine={false}
-                            width={80}
-                        />
-                        <ChartTooltip
-                            cursor={false}
-                            content={<ChartTooltipContent 
-                                formatter={(value) => `${Number(value).toLocaleString()} orders`}
-                                indicator="dot" 
-                            />}
-                        />
+                        <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
+                        <YAxis tickFormatter={(value) => `${value}`} allowDecimals={false} tickLine={false} axisLine={false} width={80} />
+                        <ChartTooltip cursor={false} content={<ChartTooltipContent formatter={(value) => `${Number(value).toLocaleString()} orders`} indicator="dot" />} />
                         <Bar dataKey="total" fill="var(--color-total)" radius={4} />
                     </BarChart>
                 </ChartContainer>
@@ -445,7 +404,8 @@ export default function DashboardPage() {
                                             </div>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="hidden md:table-cell">{order.shippingAddress?.city || 'N/A'}</TableCell>
+                                    {/* UPDATED: Use extractCity helper */}
+                                    <TableCell className="hidden md:table-cell">{extractCity(order.shippingAddress)}</TableCell>
                                     <TableCell className="text-right">₹{(order.totalAmount || 0).toFixed(2)}</TableCell>
                                     <TableCell className="hidden text-right sm:table-cell">{order.orderDate ? format(order.orderDate.toDate(), 'PP') : 'N/A'}</TableCell>
                                 </TableRow>
