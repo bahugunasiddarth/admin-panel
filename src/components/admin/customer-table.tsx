@@ -32,6 +32,7 @@ type ActionState =
 
 export function CustomerTable({ customers }: { customers: Customer[] }) {
   const [activeAction, setActiveAction] = useState<ActionState>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeAction) {
@@ -51,13 +52,11 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
   const formatAddress = (addr: any) => {
     if (!addr) return 'N/A';
     if (typeof addr === 'string') return addr;
-    
-    // UPDATED: Handle billingAddress structure (streetAddress, pinCode)
     const parts = [
-        addr.street || addr.Street || addr.streetAddress, // Added streetAddress
+        addr.street || addr.Street || addr.streetAddress,
         addr.city || addr.City,
         addr.state || addr.State,
-        addr.zip || addr.Zip || addr.pinCode, // Added pinCode
+        addr.zip || addr.Zip || addr.pinCode,
         addr.country || addr.Country
     ].filter(Boolean);
     return parts.length > 0 ? parts.join(', ') : 'N/A';
@@ -107,7 +106,10 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
                      )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
+                    <DropdownMenu
+                      open={openMenuId === customer.id} 
+                      onOpenChange={(isOpen) => setOpenMenuId(isOpen ? customer.id : null)}
+                    >
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">
                           <MoreHorizontal className="h-4 w-4" />
@@ -117,19 +119,28 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuItem
-                          onClick={() => setActiveAction({ type: 'history', customer })}
+                          onClick={() => {
+                            setActiveAction({ type: 'history', customer });
+                            setOpenMenuId(null);
+                          }}
                         >
                           <History className="mr-2 h-4 w-4" />
                           Order History
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => setActiveAction({ type: 'edit', customer })}
+                          onClick={() => {
+                            setActiveAction({ type: 'edit', customer });
+                            setOpenMenuId(null);
+                          }}
                         >
                           Edit Details
                         </DropdownMenuItem>
                          <DropdownMenuItem
                           className="text-destructive"
-                          onClick={() => setActiveAction({ type: 'delete', customer })}
+                          onClick={() => {
+                            setActiveAction({ type: 'delete', customer });
+                            setOpenMenuId(null);
+                          }}
                         >
                           Delete Customer
                         </DropdownMenuItem>

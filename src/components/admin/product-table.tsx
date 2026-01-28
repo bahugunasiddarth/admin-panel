@@ -24,14 +24,12 @@ import { ProductFormDialog } from './product-form';
 import { DeleteProductDialog } from './product-actions';
 import Image from 'next/image';
 
-// Define a type for the actions to make the state management more robust.
 type ActionState = 
   | { type: 'add' }
   | { type: 'edit', product: Product }
   | { type: 'delete', product: Product }
   | null;
 
-// UPDATED: Added isBestsellerPage to the type definition
 export function ProductTable({ 
   products, 
   type, 
@@ -41,8 +39,10 @@ export function ProductTable({
   type: 'gold' | 'silver', 
   isBestsellerPage?: boolean 
 }) {
-  // A single state to manage which dialog is open and with what data.
   const [activeAction, setActiveAction] = useState<ActionState>(null);
+  
+  // NEW: State to control which dropdown is open (only one at a time)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const handleDialogClose = (isOpen: boolean) => {
     if (!isOpen) {
@@ -109,7 +109,7 @@ export function ProductTable({
                   <Image
                     alt={product.name}
                     className="aspect-square rounded-md object-cover"
-                    data-ai-hint={`${product.type} ${product.category}`}
+                    data-ai-hint={`${product.material} ${product.category}`} 
                     height="64"
                     src={getDisplayUrl(product.imageUrls)}
                     width="64"
@@ -124,7 +124,9 @@ export function ProductTable({
                 <TableCell className="hidden lg:table-cell">{product.category}</TableCell>
                 <TableCell className="text-right">₹{product.price.toFixed(2)}</TableCell>
                 <TableCell className="hidden text-right md:table-cell">
-                    {product.stockQuantity !== undefined ? (
+                    {product.availability === 'MADE TO ORDER' ? (
+                        <span className="text-muted-foreground text-sm">N/A</span>
+                    ) : product.stockQuantity !== undefined ? (
                         <Badge variant={(product.stockQuantity || 0) < 10 ? 'destructive' : 'outline'}>
                             {product.stockQuantity}
                         </Badge>
@@ -133,7 +135,11 @@ export function ProductTable({
                     )}
                 </TableCell>
                 <TableCell>
-                  <DropdownMenu>
+                  {/* UPDATED: Controlled DropdownMenu */}
+                  <DropdownMenu 
+                    open={openMenuId === product.id} 
+                    onOpenChange={(isOpen) => setOpenMenuId(isOpen ? product.id : null)}
+                  >
                     <DropdownMenuTrigger asChild>
                       <Button aria-haspopup="true" size="icon" variant="ghost">
                         <MoreHorizontal className="h-4 w-4" />
@@ -145,7 +151,8 @@ export function ProductTable({
                       <DropdownMenuItem
                         onSelect={(e) => {
                           e.preventDefault();
-                          setTimeout(() => setActiveAction({ type: 'edit', product }), 0);
+                          setActiveAction({ type: 'edit', product });
+                          setOpenMenuId(null); // Close menu on select
                         }}
                       >
                         Edit
@@ -154,7 +161,8 @@ export function ProductTable({
                         className="text-destructive"
                         onSelect={(e) => {
                           e.preventDefault();
-                          setTimeout(() => setActiveAction({ type: 'delete', product }), 0);
+                          setActiveAction({ type: 'delete', product });
+                          setOpenMenuId(null); // Close menu on select
                         }}
                       >
                         Delete
@@ -174,7 +182,6 @@ export function ProductTable({
         onOpenChange={handleDialogClose}
         product={activeAction?.type === 'edit' ? activeAction.product : null}
         type={type}
-        // UPDATED: Passing the prop down to the form
         isBestsellerOnly={isBestsellerPage} 
       />
 

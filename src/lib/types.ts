@@ -23,16 +23,6 @@ export type Product = {
   sizes?: string[];            
 };
 
-export type Customer = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone?: string;
-  address?: any; 
-  isAdmin?: boolean;
-};
-
 export type Category = {
   name: string;
   imageUrl: string;
@@ -83,6 +73,9 @@ export type InstagramPost = {
   slug: string;
 }
 
+// 1. ADDED: OrderStatus Type
+export type OrderStatus = 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+
 export type Order = {
     id: string;
     userId: string;
@@ -92,7 +85,9 @@ export type Order = {
     billingAddress: string;
     paymentMethod: string;
     status: string;
-    orderStatus?: string;
+    // 2. UPDATED: Uses OrderStatus type and ADDED stockDecremented
+    orderStatus?: OrderStatus | string;
+    stockDecremented?: boolean; 
 }
 
 export type OrderItem = {
@@ -104,6 +99,9 @@ export type OrderItem = {
     itemPrice: number;
     size?: string;
 }
+
+// 3. ADDED: OrderItemDoc alias (used in your admin components)
+export type OrderItemDoc = OrderItem;
 
 export type RingSizeGuideEntry = {
   insideDiameterMm: string;
@@ -123,4 +121,15 @@ export type RingSizeGuideEntryInches = {
   eastAsia: string;
   india: string;
   italySpainSwitzerland: string;
+};
+
+// 4. ADDED: Customer Type (Required for Customer Table)
+export type Customer = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  address?: any; 
+  isAdmin?: boolean;
 };

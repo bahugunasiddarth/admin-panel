@@ -3,7 +3,7 @@
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirestore } from '@/firebase';
-import { runTransaction, doc, collection, getDocs, query } from 'firebase/firestore';
+import { runTransaction, doc, collection, getDocs, query, DocumentReference } from 'firebase/firestore'; // Added DocumentReference
 import type { Order, OrderItemDoc, OrderStatus } from '@/lib/types';
 import {
   Select,
@@ -49,13 +49,14 @@ export function OrderStatusSelect({ order }: OrderStatusSelectProps) {
         return;
       }
 
-      // Fetch order items outside the transaction.
+      // 1. Fetch items outside the transaction (this is a standard query, not a transactional read)
       const itemsQuery = query(collection(firestore, 'users', order.userId, 'orders', order.id, 'orderItems'));
       const itemsSnapshot = await getDocs(itemsQuery);
       const items = itemsSnapshot.docs.map(doc => doc.data() as OrderItemDoc);
 
       try {
         await runTransaction(firestore, async (transaction) => {
+          // 2. READ: Get Order Doc
           const orderDocRef = doc(firestore, 'users', order.userId, 'orders', order.id);
           const orderDocSnap = await transaction.get(orderDocRef);
           
@@ -65,17 +66,21 @@ export function OrderStatusSelect({ order }: OrderStatusSelectProps) {
           
           const currentOrderData = orderDocSnap.data() as Order;
           const stockWasDecremented = currentOrderData.stockDecremented === true;
-
           let newStockDecremented = stockWasDecremented;
 
           const shouldDecrement = !stockWasDecremented && (newStatus === 'Processing' || newStatus === 'Shipped' || newStatus === 'Delivered');
           const shouldIncrement = stockWasDecremented && newStatus === 'Cancelled';
 
+          // 3. READ: Get all Product Docs involved (Prepare Phase)
+          // We store the logic to apply later so we don't write yet
+          const productUpdates: { ref: DocumentReference, newStock: number }[] = [];
+
           if (shouldDecrement || shouldIncrement) {
             for (const item of items) {
               if (!item.productId) continue;
+              
               const productRef = doc(firestore, 'products', item.productId);
-              const productSnap = await transaction.get(productRef);
+              const productSnap = await transaction.get(productRef); // This READ is valid because we haven't written yet
 
               if (!productSnap.exists()) {
                 console.warn(`Product with ID ${item.productId} not found. Cannot update stock.`);
@@ -89,14 +94,23 @@ export function OrderStatusSelect({ order }: OrderStatusSelectProps) {
                   ? currentStock - quantityChange
                   : currentStock + quantityChange;
 
-              transaction.update(productRef, { stockQuantity: newStock < 0 ? 0 : newStock });
+              productUpdates.push({
+                ref: productRef,
+                newStock: newStock < 0 ? 0 : newStock
+              });
             }
             newStockDecremented = shouldDecrement;
           }
 
+          // 4. WRITE: Apply all updates (Commit Phase)
+          // Now that all reads are done, we can write.
+          for (const update of productUpdates) {
+             transaction.update(update.ref, { stockQuantity: update.newStock });
+          }
+
           transaction.update(orderDocRef, {
             orderStatus: newStatus,
-            status: newStatus, // Sync both fields if it exists
+            status: newStatus,
             stockDecremented: newStockDecremented,
           });
         });
