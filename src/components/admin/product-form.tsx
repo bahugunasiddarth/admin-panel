@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useFirestore } from '@/firebase';
 import { collection, doc, writeBatch } from 'firebase/firestore';
+import { CloudinaryUpload } from '@/components/cloudinary-upload';
 import {
   Dialog,
   DialogContent,
@@ -51,18 +52,32 @@ interface ProductFormDialogProps {
 const formSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().min(1, 'Description is required'),
-  price: z.coerce.number().min(0.01, 'Price must be positive'),
+  price: z.coerce.number().min(0, 'Price must be 0 or greater'),
   category: z.string().min(1, 'Category is required'),
   imageUrls: z.string().min(1, 'At least one image URL is required'),
   availability: z.enum(['READY TO SHIP', 'MADE TO ORDER']),
   sizes: z.string().optional(),
   stockQuantity: z.coerce.number().min(0, 'Stock cannot be negative').default(0),
   isBestseller: z.boolean().default(false),
+  priceOnRequest: z.boolean().default(false),
+}).refine((data) => {
+  if (!data.priceOnRequest && data.price <= 0) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Price must be positive unless 'Query for Rate' is enabled",
+  path: ["price"],
 });
 
 type FormData = z.infer<typeof formSchema>;
 
 export function ProductFormDialog({ open, onOpenChange, product, type, isBestsellerOnly = false }: ProductFormDialogProps) {
+  const handleImageUpload = (url: string) => {
+    const currentUrls = form.getValues('imageUrls');
+    const newUrls = currentUrls ? `${currentUrls}\n${url}` : url;
+    form.setValue('imageUrls', newUrls, { shouldValidate: true });
+  };
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const firestore = useFirestore();
@@ -80,15 +95,21 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
       sizes: '',
       stockQuantity: 0,
       isBestseller: isBestsellerOnly,
+      priceOnRequest: type === 'gold',
     },
   });
 
   const category = form.watch('category');
-  const availability = form.watch('availability'); // Watch availability to toggle stock input
+  const availability = form.watch('availability');
+  const priceOnRequest = form.watch('priceOnRequest');
 
   useEffect(() => {
     if (open) {
       if (product) {
+        // Safe access to properties using (product as any) fallback if types aren't fully synced yet
+        const mat = product.material || (product as any).type || '';
+        const isGold = mat === 'Gold' || (mat as string).toLowerCase().includes('gold');
+
         form.reset({
           name: product.name,
           description: product.description,
@@ -99,6 +120,8 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
           sizes: product.sizes?.join(', ') || '',
           stockQuantity: product.stockQuantity || 0,
           isBestseller: product.isBestseller || isBestsellerOnly,
+          // Use the property if it exists, otherwise default to True if it's Gold
+          priceOnRequest: product.priceOnRequest ?? isGold, 
         });
       } else {
         form.reset({
@@ -111,10 +134,11 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
           sizes: '',
           stockQuantity: 0,
           isBestseller: isBestsellerOnly,
+          priceOnRequest: type === 'gold', 
         });
       }
     }
-  }, [product, open, form, isBestsellerOnly]);
+  }, [product, open, form, isBestsellerOnly, type]);
 
   const onSubmit = (data: FormData) => {
     startTransition(async () => {
@@ -132,9 +156,10 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
         availability: data.availability,
         type: type,
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(Boolean) : [],
-        // Force stock to 0 if Made to Order, effectively removing stock logic for it
         stockQuantity: data.availability === 'MADE TO ORDER' ? 0 : data.stockQuantity,
         isBestseller: data.isBestseller,
+        priceOnRequest: data.priceOnRequest,
+        material: type === 'gold' ? 'Gold' : 'Silver',
       };
       
       try {
@@ -202,13 +227,37 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{product ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+          <DialogTitle>{product ? 'Edit Product' : 'Add New Product'} ({type === 'gold' ? 'Gold' : 'Silver'})</DialogTitle>
           <DialogDescription>
             {product ? 'Update the details of your product.' : 'Fill in the details for the new product.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4">
+            
+            <FormField
+              control={form.control}
+              name="priceOnRequest"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-muted/50">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                       Query for Rate (Hide Price)
+                    </FormLabel>
+                    <FormDescription>
+                       If checked, price will be hidden and users will see a "Query for Rate" button.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="name"
@@ -222,6 +271,7 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
               name="description"
@@ -235,21 +285,50 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
                 </FormItem>
               )}
             />
+
+            {/* --- RESTORED: Availability Selector --- */}
+            <FormField
+              control={form.control}
+              name="availability"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Availability Status</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select availability" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="READY TO SHIP">Ready to Ship</SelectItem>
+                      <SelectItem value="MADE TO ORDER">Made to Order</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* -------------------------------------- */}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField
                 control={form.control}
                 name="price"
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Price</FormLabel>
+                    <FormLabel>Price {priceOnRequest && '(Optional)'}</FormLabel>
                     <FormControl>
-                        <Input type="number" step="0.01" {...field} />
+                        <Input 
+                            type="number" 
+                            step="0.01" 
+                            {...field} 
+                            placeholder={priceOnRequest ? "0" : "Enter price"}
+                        />
                     </FormControl>
                     <FormMessage />
                     </FormItem>
                 )}
                 />
-                 {/* CRITICAL: ONLY SHOW STOCK INPUT FOR READY TO SHIP */}
                  {availability === 'READY TO SHIP' && (
                      <FormField
                         control={form.control}
@@ -266,6 +345,7 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
                      />
                  )}
             </div>
+            
             <FormField
               control={form.control}
               name="category"
@@ -311,33 +391,38 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Image URLs</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    Enter one image URL per line. The first URL will be the main display image.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="availability"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Availability Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select availability" />
-                      </SelectTrigger>
+                  <div className="flex gap-2 items-start">
+                    <FormControl className="flex-1">
+                      <Textarea 
+                        placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg" 
+                        {...field} 
+                        className="min-h-[100px] font-mono text-xs"
+                      />
                     </FormControl>
-                    <SelectContent>
-                      <SelectItem value="READY TO SHIP">Ready to Ship</SelectItem>
-                      <SelectItem value="MADE TO ORDER">Made to Order</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <div className="mt-1">
+                       <CloudinaryUpload onUploadSuccess={handleImageUpload} />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-2 overflow-x-auto py-2">
+                     {field.value && field.value.split('\n').map((url, index) => {
+                        const cleanUrl = url.trim();
+                        if (!cleanUrl) return null;
+                        return (
+                           <div key={index} className="relative h-16 w-16 border rounded overflow-hidden shrink-0">
+                             {/* eslint-disable-next-line @next/next/no-img-element */}
+                             <img 
+                               src={cleanUrl} 
+                               alt="Preview" 
+                               className="h-full w-full object-cover"
+                               onError={(e) => (e.currentTarget.style.display = 'none')} 
+                             />
+                           </div>
+                        );
+                     })}
+                  </div>
+                  <FormDescription>
+                    Enter one image URL per line. Use the button to upload directly.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -355,12 +440,7 @@ export function ProductFormDialog({ open, onOpenChange, product, type, isBestsel
                             />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                            <FormLabel>
-                            Mark as Bestseller
-                            </FormLabel>
-                            <FormDescription>
-                                Bestseller products will be highlighted on the website.
-                            </FormDescription>
+                            <FormLabel>Mark as Bestseller</FormLabel>
                             <FormMessage />
                         </div>
                         </FormItem>
