@@ -33,6 +33,8 @@ function OrderItemRow({ item }: { item: OrderItem }) {
     const [productBackupPrice, setProductBackupPrice] = useState<number | null>(null);
     const [gstRate, setGstRate] = useState<number>(0); 
     const [isStockLoading, setIsStockLoading] = useState(true);
+    // 1. ADDED: State for availability
+    const [availability, setAvailability] = useState<string | null>(null);
 
     useEffect(() => {
         let isMounted = true;
@@ -50,20 +52,21 @@ function OrderItemRow({ item }: { item: OrderItem }) {
                     if (productSnap.exists()) {
                         const data = productSnap.data();
                         setStock(data.stockQuantity ?? null);
+                        // 2. ADDED: Fetch availability
+                        setAvailability(data.availability || null);
                         
                         // 1. Fetch Backup Price
                         const backupPrice = data.price || data.unitPrice || data.amount || 0;
                         setProductBackupPrice(parseNumber(backupPrice));
 
                         // 2. Fetch/Determine GST Rate
-                        // If 'gst' is stored on product, use it. Otherwise guess based on type.
                         let rate = 0;
                         if (data.gst || data.tax) {
                             rate = parseNumber(data.gst || data.tax);
                         } else if (data.type === 'gold' || data.type === 'silver') {
-                            rate = 3; // Default 3% for Jewelry
+                            rate = 3; 
                         } else {
-                            rate = 0; // Default 0% for others if unknown
+                            rate = 0; 
                         }
                         setGstRate(rate);
 
@@ -99,7 +102,6 @@ function OrderItemRow({ item }: { item: OrderItem }) {
     const quantity = parseNumber(item.quantity ?? item.qty ?? item.count ?? item.pieces ?? 0);
     
     // 3. GST Calculation
-    // Priority: Item GST > Product GST > Default
     const finalGstRate = item.gst ? parseNumber(item.gst) : gstRate;
     const baseTotal = price * quantity;
     const gstAmount = (baseTotal * finalGstRate) / 100;
@@ -149,11 +151,18 @@ function OrderItemRow({ item }: { item: OrderItem }) {
                 </div>
             </TableCell>
 
+            {/* 3. UPDATED: Stock Column Logic */}
             <TableCell className="hidden text-center md:table-cell">
                  {isStockLoading ? (
                     <div className="flex justify-center"><Loader2 className="h-4 w-4 animate-spin" /></div>
                 ) : (
-                    stock !== null ? <Badge variant={stock < 10 ? 'destructive' : 'outline'}>{stock}</Badge> : 'N/A'
+                    availability === 'MADE TO ORDER' ? (
+                        <span className="text-muted-foreground text-sm">N/A</span>
+                    ) : stock !== null ? (
+                        <Badge variant={stock < 10 ? 'destructive' : 'outline'}>{stock}</Badge> 
+                    ) : (
+                        'N/A'
+                    )
                 )}
             </TableCell>
             <TableCell className="text-right font-bold">₹{finalSubtotal.toFixed(2)}</TableCell>

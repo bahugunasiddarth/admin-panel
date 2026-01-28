@@ -3,7 +3,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
-import type { Order, OrderItemDoc } from '@/lib/types';
+import type { OrderItemDoc } from '@/lib/types';
 
 // Helper to safely parse numbers from strings/numbers
 const parseNumber = (val: any): number => {
@@ -18,7 +18,7 @@ const parseNumber = (val: any): number => {
 
 // Helper to format addresses safely (handles strings vs objects)
 const formatAddress = (addr: any, name: string) => {
-    const lines = [name];
+    const lines = [name || 'Customer']; 
     
     if (!addr) {
         lines.push('N/A');
@@ -41,7 +41,7 @@ const formatAddress = (addr: any, name: string) => {
     return lines.join('\n');
 };
 
-export function generateInvoicePdf(order: Order, items: OrderItemDoc[]) {
+export function generateInvoicePdf(order: any, items: OrderItemDoc[]) {
   const doc = new jsPDF();
 
   // --- 1. HEADER ---
@@ -53,19 +53,25 @@ export function generateInvoicePdf(order: Order, items: OrderItemDoc[]) {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100, 100, 100);
-  doc.text('Gleaming Admin', 14, 26);
-  doc.text('contact@gleaming.com', 14, 30); 
+  doc.text('Khushi Gems and Jewels', 14, 26); 
+  doc.text('anilsoni7104@gmail.com', 14, 30); 
 
   // --- 2. INVOICE DETAILS ---
-  const orderId = order.orderId ? order.orderId.toUpperCase() : order.id.slice(0, 8).toUpperCase();
-  const orderDate = order.orderDate ? format(order.orderDate.toDate(), 'PPP') : 'N/A';
+  const orderId = order.orderId ? order.orderId.toUpperCase() : (order.id ? order.id.slice(0, 8).toUpperCase() : 'N/A');
+  
+  let orderDate = 'N/A';
+  if (order.orderDate) {
+      // Handle both Firestore Timestamp and JS Date
+      const dateObj = order.orderDate.toDate ? order.orderDate.toDate() : new Date(order.orderDate);
+      orderDate = format(dateObj, 'PPP');
+  }
 
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   const rightX = 196;
   doc.text(`Invoice No: #${orderId}`, rightX, 20, { align: 'right' });
   doc.text(`Date: ${orderDate}`, rightX, 25, { align: 'right' });
-  doc.text(`Status: ${order.orderStatus}`, rightX, 30, { align: 'right' });
+  doc.text(`Status: ${order.orderStatus || 'N/A'}`, rightX, 30, { align: 'right' });
 
   // Divider
   doc.setDrawColor(200, 200, 200);
@@ -73,6 +79,7 @@ export function generateInvoicePdf(order: Order, items: OrderItemDoc[]) {
 
   // --- 3. ADDRESSES ---
   const yAddr = 48;
+  const customerName = order.customer?.name || 'Valued Customer';
   
   // Billing
   doc.setFont('helvetica', 'bold');
@@ -82,7 +89,7 @@ export function generateInvoicePdf(order: Order, items: OrderItemDoc[]) {
   doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
   
-  const billingText = formatAddress(order.billingAddress, order.customer.name);
+  const billingText = formatAddress(order.billingAddress, customerName);
   doc.text(billingText, 14, yAddr + 6);
 
   // Shipping
@@ -94,7 +101,7 @@ export function generateInvoicePdf(order: Order, items: OrderItemDoc[]) {
   doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
 
-  const shippingText = formatAddress(order.shippingAddress, order.customer.name);
+  const shippingText = formatAddress(order.shippingAddress, customerName);
   doc.text(shippingText, 110, yAddr + 6);
 
   // --- 4. ITEMS TABLE with GST ---
@@ -102,15 +109,27 @@ export function generateInvoicePdf(order: Order, items: OrderItemDoc[]) {
   let subTotalBeforeTax = 0;
 
   const tableBody = items.map((item: any) => {
-      // Robust field checking
-      const price = parseNumber(item.price || item.unitPrice || item.amount || 0);
+      // 1. Get Price (Check all possible fields)
+      const price = parseNumber(item.itemPrice || item.price || item.unitPrice || item.amount || 0);
       const quantity = parseNumber(item.quantity || item.qty || 0);
       
-      // GST Logic (Default 3% for Jewelry if not present)
+      // 2. GST Logic
       let gstPercent = 0;
+
+      // Check explicit tax fields first
       if (item.gst || item.tax) {
           gstPercent = parseNumber(item.gst || item.tax);
-      } else if (item.type === 'gold' || item.type === 'silver') {
+      } 
+      // Check explicit type
+      else if (item.type === 'gold' || item.type === 'silver') {
+          gstPercent = 3;
+      }
+      // Check Name for keywords
+      else if (item.name && /gold|silver|diamond|ring|chain|necklace/i.test(item.name)) {
+          gstPercent = 3;
+      }
+      // FALLBACK: If price exists, default to 3% (Jewelry Standard)
+      else if (price > 0) {
           gstPercent = 3;
       }
       
@@ -172,7 +191,7 @@ export function generateInvoicePdf(order: Order, items: OrderItemDoc[]) {
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(120, 120, 120);
-  doc.text('Thank you for your business!', 105, doc.internal.pageSize.height - 15, { align: 'center' });
+  doc.text('Thank you for shopping with Khushi Jewels!', 105, doc.internal.pageSize.height - 15, { align: 'center' });
 
   doc.save(`invoice_${orderId}.pdf`);
 }
