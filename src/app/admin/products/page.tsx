@@ -11,13 +11,13 @@ import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PRODUCT_CATEGORIES } from '@/lib/categories';
+import { ManagementHeader } from '@/components/admin/management-header';
 
 const availabilityOptions: readonly ('READY TO SHIP' | 'MADE TO ORDER')[] = ['READY TO SHIP', 'MADE TO ORDER'];
 
 export default function ProductsPage() {
   const firestore = useFirestore();
 
-  // State for filters and search
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
@@ -48,21 +48,17 @@ export default function ProductsPage() {
   const filteredGoldProducts = useMemo(() => filterProducts(goldProducts), [goldProducts, searchTerm, categoryFilter, availabilityFilter]);
   const filteredSilverProducts = useMemo(() => filterProducts(silverProducts), [silverProducts, searchTerm, categoryFilter, availabilityFilter]);
 
-
   const isLoading = isLoadingGold || isLoadingSilver;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">Products</h1>
-          <p className="text-muted-foreground">
-            Manage your gold and silver products.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">Inventory</h1>
+          <p className="text-muted-foreground">Manage your gold and silver product catalog.</p>
         </div>
       </div>
       
-      {/* Filter and Search Controls */}
       <div className="flex flex-col gap-4 md:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -84,19 +80,7 @@ export default function ProductsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
-          <SelectTrigger className="w-full md:w-[240px]">
-            <SelectValue placeholder="Filter by availability" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Availability</SelectItem>
-            {availabilityOptions.map(opt => (
-              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
-
 
       <Tabs defaultValue="gold">
         <TabsList className="grid w-full grid-cols-2">
@@ -105,9 +89,12 @@ export default function ProductsPage() {
         </TabsList>
         <TabsContent value="gold">
           <Card>
-            <CardHeader>
-              <CardTitle>Gold Products</CardTitle>
-              <CardDescription>View, add, edit, or delete gold products.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <div className="grid gap-1">
+                <CardTitle>Gold Products</CardTitle>
+                <CardDescription>View and manage gold inventory.</CardDescription>
+              </div>
+              <ManagementHeader type="gold" />
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -122,9 +109,12 @@ export default function ProductsPage() {
         </TabsContent>
         <TabsContent value="silver">
           <Card>
-             <CardHeader>
-              <CardTitle>Silver Products</CardTitle>
-              <CardDescription>View, add, edit, or delete silver products.</CardDescription>
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <div className="grid gap-1">
+                <CardTitle>Silver Products</CardTitle>
+                <CardDescription>View and manage silver inventory.</CardDescription>
+              </div>
+              <ManagementHeader type="silver" />
             </CardHeader>
             <CardContent>
               {isLoading ? (

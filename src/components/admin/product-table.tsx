@@ -77,10 +77,7 @@ export function ProductTable({
   return (
     <>
       <div className="flex justify-end mb-4">
-        <Button onClick={() => setActiveAction({ type: 'add' })}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Product
-        </Button>
+        
       </div>
       <div className="rounded-md border">
       <Table>

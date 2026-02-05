@@ -11,15 +11,38 @@ interface CloudinaryUploadProps {
 export function CloudinaryUpload({ onUploadSuccess }: CloudinaryUploadProps) {
   return (
     <CldUploadWidget 
-      // FIX 1: Removed the < > brackets. 
-      // Ensure 'khushi_uploads' matches the Unsigned Preset name in your Cloudinary Settings exactly.
       uploadPreset="khushi_uploads"
-      onSuccess={(result: any) => {
-        // Cloudinary returns the secure_url on success
-        if (result.info?.secure_url) {
-            onUploadSuccess(result.info.secure_url);
+      // Added options to ensure it behaves like a modal
+      options={{
+        sources: ['local', 'url', 'camera'],
+        multiple: false,
+        maxFiles: 1,
+        // Force styling if needed, though CSS class is better
+        styles: {
+            palette: {
+                window: "#FFFFFF",
+                windowBorder: "#90A0B3",
+                tabIcon: "#0078FF",
+                menuIcons: "#5A616A",
+                textDark: "#000000",
+                textLight: "#FFFFFF",
+                link: "#0078FF",
+                action: "#FF620C",
+                inactiveTabIcon: "#0E2F5A",
+                error: "#F44235",
+                inProgress: "#0078FF",
+                complete: "#20B832",
+                sourceBg: "#E4EBF1"
+            }
         }
       }}
+onSuccess={(result: any) => {
+  // Cloudinary says: "Here is the new image URL"
+  if (result.info?.secure_url) {
+      // You pass this URL back to your form to save it
+      onUploadSuccess(result.info.secure_url);
+  }
+}}
     >
       {({ open }) => {
         return (

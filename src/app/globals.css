@@ -66,3 +66,44 @@
     @apply bg-background text-foreground;
   }
 }
+
+div#__cloudinary-widget-container {
+    z-index: 20000 !important;
+}
+
+/* 2. The Iframe itself */
+iframe[src*="cloudinary"] {
+    z-index: 20001 !important;
+    position: fixed !important;
+}
+
+/* 3. The Overlay (Backdrop) */
+.cloudinary-overlay, 
+.widget-overlay {
+    z-index: 20000 !important;
+}
+
+/* 4. Catch-all for the iframe by ID and Data attribute */
+iframe[data-test="uw-iframe"],
+#cloudinary-widget {
+    z-index: 20001 !important;
+}
+
+/* Force the Cloudinary widget to the front of all popups */
+iframe[src*="cloudinary"] {
+    z-index: 9999 !important;
+}
+
+#cloudinary-overlay, 
+#cloudinary-widget {
+    z-index: 9999 !important;
+}
+
+/* FORCE CLOUDINARY TO FRONT */
+iframe[src*="cloudinary"] {
+    z-index: 10000 !important;
+}
+
+div[data-test="cloudinary-widget"] {
+    z-index: 10000 !important;
+}

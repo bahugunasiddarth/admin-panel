@@ -73,11 +73,11 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export function ProductFormDialog({ open, onOpenChange, product, type, isBestsellerOnly = false }: ProductFormDialogProps) {
-  const handleImageUpload = (url: string) => {
-    const currentUrls = form.getValues('imageUrls');
-    const newUrls = currentUrls ? `${currentUrls}\n${url}` : url;
-    form.setValue('imageUrls', newUrls, { shouldValidate: true });
-  };
+const handleImageUpload = (url: string) => {
+  const currentUrls = form.getValues('imageUrls');
+  const newUrls = currentUrls ? `${currentUrls}\n${url}` : url;
+  form.setValue('imageUrls', newUrls, { shouldValidate: true });
+};
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const firestore = useFirestore();
