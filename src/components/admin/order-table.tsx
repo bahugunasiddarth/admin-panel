@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import type { Order } from '@/lib/types';
 import {
   Table,
@@ -90,8 +90,8 @@ function OrderRow({
   const isCompleted = order.orderStatus === 'Delivered' || order.orderStatus === 'Cancelled';
 
   return (
-    <tbody className="group/row border-b last:border-0">
-      <TableRow className="hover:bg-muted/50">
+    <>
+      <TableRow className={`hover:bg-muted/50 ${isOpen ? 'border-b-0' : ''}`}>
         <TableCell className="font-medium w-[150px]">
           <div className="flex items-center gap-2">
             <Button 
@@ -152,7 +152,7 @@ function OrderRow({
       
       {isOpen && (
         <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableCell colSpan={8} className="p-0 border-t">
+            <TableCell colSpan={8} className="p-0 border-t-0">
               <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <h4 className="font-bold mb-4 text-sm">Order Items</h4>
@@ -196,7 +196,7 @@ function OrderRow({
             </TableCell>
         </TableRow>
       )}
-    </tbody>
+    </>
   );
 }
 
@@ -256,21 +256,21 @@ export function OrderTable({ orders }: { orders: Order[] }) {
               </TableRow>
             </TableHeader>
             
-            {filteredOrders.length === 0 ? (
-                <TableBody>
-                    <TableRow>
-                        <TableCell colSpan={8} className="text-center h-24">No orders found.</TableCell>
-                    </TableRow>
-                </TableBody>
-            ) : (
-                filteredOrders.map((order) => (
-                    <OrderRow 
-                        key={order.id} 
-                        order={order} 
-                        setActiveAction={setActiveAction} 
-                    />
-                ))
-            )}
+            <TableBody>
+              {filteredOrders.length === 0 ? (
+                  <TableRow>
+                      <TableCell colSpan={8} className="text-center h-24">No orders found.</TableCell>
+                  </TableRow>
+              ) : (
+                  filteredOrders.map((order) => (
+                      <OrderRow 
+                          key={order.id} 
+                          order={order} 
+                          setActiveAction={setActiveAction} 
+                      />
+                  ))
+              )}
+            </TableBody>
           </Table>
         </CardContent>
       </Card>

@@ -4,10 +4,11 @@ import { collection, doc, getDoc } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, HelpCircle } from 'lucide-react';
+import { Loader2, HelpCircle, Truck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { OrderItemDoc } from '@/lib/types';
+import { calculateDeliveryRange } from '@/lib/delivery-utils';
 
 type OrderItem = OrderItemDoc & { 
     id: string; 
@@ -27,13 +28,12 @@ const parseNumber = (val: any): number => {
     return 0;
 };
 
-function OrderItemRow({ item }: { item: OrderItem }) {
+function OrderItemRow({ item, orderDate }: { item: OrderItem, orderDate: any }) {
     const firestore = useFirestore();
     const [stock, setStock] = useState<number | null>(null);
     const [productBackupPrice, setProductBackupPrice] = useState<number | null>(null);
     const [gstRate, setGstRate] = useState<number>(0); 
     const [isStockLoading, setIsStockLoading] = useState(true);
-    // 1. ADDED: State for availability
     const [availability, setAvailability] = useState<string | null>(null);
 
     useEffect(() => {
@@ -52,7 +52,6 @@ function OrderItemRow({ item }: { item: OrderItem }) {
                     if (productSnap.exists()) {
                         const data = productSnap.data();
                         setStock(data.stockQuantity ?? null);
-                        // 2. ADDED: Fetch availability
                         setAvailability(data.availability || null);
                         
                         // 1. Fetch Backup Price
@@ -109,6 +108,11 @@ function OrderItemRow({ item }: { item: OrderItem }) {
     // 4. Final Subtotal (Base + GST)
     const finalSubtotal = baseTotal + gstAmount;
 
+    // 5. Delivery Calculation
+    // Use the status stamped on the order item if available, otherwise fallback to current product availability
+    const availabilityToUse = item.status || availability || 'READY TO SHIP';
+    const { estimatedRange } = calculateDeliveryRange(availabilityToUse, orderDate);
+
     return (
         <TableRow>
             <TableCell className="font-medium">
@@ -134,6 +138,10 @@ function OrderItemRow({ item }: { item: OrderItem }) {
                 <div className="text-xs text-muted-foreground mt-1 font-normal">
                     {item.status || 'READY TO SHIP'}
                 </div>
+                <div className="flex items-center gap-1.5 text-xs text-blue-600 mt-1 font-medium">
+                    <Truck className="h-3 w-3" />
+                    <span>Est: {estimatedRange}</span>
+                </div>
             </TableCell>
             <TableCell className="text-center">{quantity}</TableCell>
             <TableCell className="hidden text-right sm:table-cell">
@@ -151,7 +159,7 @@ function OrderItemRow({ item }: { item: OrderItem }) {
                 </div>
             </TableCell>
 
-            {/* 3. UPDATED: Stock Column Logic */}
+            {/* Stock Column Logic */}
             <TableCell className="hidden text-center md:table-cell">
                  {isStockLoading ? (
                     <div className="flex justify-center"><Loader2 className="h-4 w-4 animate-spin" /></div>
@@ -170,7 +178,7 @@ function OrderItemRow({ item }: { item: OrderItem }) {
     );
 }
 
-export function OrderItems({ userId, orderId }: { userId: string, orderId: string }) {
+export function OrderItems({ userId, orderId, orderDate }: { userId: string, orderId: string, orderDate?: any }) {
     const firestore = useFirestore();
 
     const itemsQuery = useMemoFirebase(() => {
@@ -202,7 +210,7 @@ export function OrderItems({ userId, orderId }: { userId: string, orderId: strin
             </TableHeader>
             <TableBody>
                 {items.map((item) => (
-                   <OrderItemRow key={item.id} item={item as OrderItem} />
+                   <OrderItemRow key={item.id} item={item as OrderItem} orderDate={orderDate} />
                 ))}
             </TableBody>
         </Table>
