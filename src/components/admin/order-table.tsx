@@ -20,12 +20,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { MoreHorizontal, ChevronDown, AlertCircle } from 'lucide-react';
+import { MoreHorizontal, ChevronDown, ChevronUp, AlertCircle, Clock } from 'lucide-react';
 import { OrderFormDialog } from './order-form';
 import { DeleteOrderDialog } from './order-actions';
 import { OrderItems } from './order-items';
@@ -33,26 +28,17 @@ import { InvoiceButton } from './invoice-button';
 import { Separator } from '@/components/ui/separator';
 import { OrderStatusSelect } from './order-status-select';
 import { Input } from '@/components/ui/input';
+import { calculateDeliveryRange } from '@/lib/delivery-utils';
 
 type ActionState = 
   | { type: 'edit', order: Order }
   | { type: 'delete', order: Order }
   | null;
 
-// --- FIX: Robust Address Display Component ---
 const AddressDisplay = ({ address }: { address: any }) => {
-    // 1. Handle Empty/Null
-    if (!address) {
-        return <p className="text-sm text-muted-foreground">No address provided.</p>;
-    }
+    if (!address) return <p className="text-sm text-muted-foreground">No address provided.</p>;
+    if (typeof address === 'string') return <div className="text-sm text-muted-foreground">{address}</div>;
 
-    // 2. Handle String Address (Fixes "comma after every alphabet" bug)
-    if (typeof address === 'string') {
-        return <div className="text-sm text-muted-foreground">{address}</div>;
-    }
-
-    // 3. Handle Object Address
-    // Attempt to find fields regardless of case (street vs Street vs addressLine1)
     const getVal = (keys: string[]) => {
         if (typeof address !== 'object') return null;
         for (const k of keys) {
@@ -68,14 +54,10 @@ const AddressDisplay = ({ address }: { address: any }) => {
     const zip = getVal(['zip', 'postalCode', 'pincode', 'zipCode']);
     const country = getVal(['country']);
 
-    // If it's an object but we can't find standard keys, try to display values nicely
     if (!street && !city && !zip) {
          return (
              <div className="text-sm text-muted-foreground">
-                 {/* Only join if values are actually strings, to prevent [object Object] */}
-                 {Object.values(address)
-                    .filter(v => typeof v === 'string' || typeof v === 'number')
-                    .join(', ')}
+                 {Object.values(address).filter(v => typeof v === 'string' || typeof v === 'number').join(', ')}
              </div>
          );
     }
@@ -92,6 +74,131 @@ const AddressDisplay = ({ address }: { address: any }) => {
         </address>
     );
 };
+
+// Extracted Row Component to isolate state and maintain clean Table DOM structure
+function OrderRow({ 
+  order, 
+  setActiveAction 
+}: { 
+  order: Order, 
+  setActiveAction: (action: ActionState) => void 
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const availability = order.orderStatus === 'Processing' ? 'MADE TO ORDER' : 'READY TO SHIP';
+  const { estimatedRange, isOverdue } = calculateDeliveryRange(availability, order.orderDate);
+  const isCompleted = order.orderStatus === 'Delivered' || order.orderStatus === 'Cancelled';
+
+  return (
+    <tbody className="group/row border-b last:border-0">
+      <TableRow className="hover:bg-muted/50">
+        <TableCell className="font-medium w-[150px]">
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="w-8 h-8 p-0"
+              onClick={() => setIsOpen(!isOpen)}
+            >
+              {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+            <span className="truncate">
+              #{order.orderId ? order.orderId.slice(0, 6).toUpperCase() : order.id.slice(0, 6).toUpperCase()}
+            </span>
+          </div>
+        </TableCell>
+        
+        <TableCell className="w-[220px]">
+          <div className="font-medium truncate">{order.customer?.name}</div>
+          <div className="hidden text-sm text-muted-foreground sm:block truncate">{order.customer?.email}</div>
+        </TableCell>
+        
+        <TableCell className="hidden md:table-cell w-[150px]">
+             {order.orderDate?.toDate ? format(order.orderDate.toDate(), 'PPP') : 'Invalid Date'}
+        </TableCell>
+
+        <TableCell className="hidden xl:table-cell w-[150px]">
+          <div className="flex flex-col">
+            <span className={`font-medium ${isOverdue && !isCompleted ? 'text-destructive' : ''}`}>
+              {estimatedRange}
+            </span>
+            {isOverdue && !isCompleted && (
+              <span className="text-[10px] uppercase font-bold text-destructive">Overdue</span>
+            )}
+          </div>
+        </TableCell>
+
+        <TableCell className="hidden lg:table-cell w-[120px]">{order.paymentMethod}</TableCell>
+        <TableCell className="text-right w-[140px]">₹{(order.totalAmount || 0).toFixed(2)}</TableCell>
+        <TableCell className="w-[160px]"><OrderStatusSelect order={order} /></TableCell>
+        
+        <TableCell className="text-center w-[80px]">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => setActiveAction({ type: 'edit', order })}>
+                  Edit Details
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive" onSelect={() => setActiveAction({ type: 'delete', order })}>
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+        </TableCell>
+      </TableRow>
+      
+      {isOpen && (
+        <TableRow className="bg-muted/50 hover:bg-muted/50">
+            <TableCell colSpan={8} className="p-0 border-t">
+              <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                  <h4 className="font-bold mb-4 text-sm">Order Items</h4>
+                  {!order.userId ? (
+                      <div className="flex items-center gap-2 text-destructive text-sm p-4 border border-destructive/20 rounded-md bg-destructive/10">
+                          <AlertCircle className="h-4 w-4" />
+                          <span>Error: Missing 'userId'. Cannot locate items.</span>
+                      </div>
+                  ) : (
+                      <OrderItems userId={order.userId} orderId={order.id} />
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="bg-background p-3 rounded-md border shadow-sm">
+                      <h4 className="font-bold mb-1 text-xs uppercase text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" /> Delivery Commitment
+                      </h4>
+                      <p className="text-sm font-semibold">{estimatedRange}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {availability === 'MADE TO ORDER' ? 'Handcrafted (25-28 days)' : 'Ready-to-ship (5-7 days)'}
+                      </p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="font-bold mb-2 text-sm">Shipping Address</h4>
+                    <AddressDisplay address={order.shippingAddress} />
+                  </div>
+                  <Separator />
+                  <div>
+                      <h4 className="font-bold mb-2 text-sm">Actions</h4>
+                      <div className="flex flex-col gap-2">
+                        <InvoiceButton order={order} />
+                        <Button variant="outline" size="sm" onClick={() => setActiveAction({ type: 'edit', order })}>
+                          Update Tracking Info
+                        </Button>
+                      </div>
+                  </div>
+                </div>
+              </div>
+            </TableCell>
+        </TableRow>
+      )}
+    </tbody>
+  );
+}
 
 export function OrderTable({ orders }: { orders: Order[] }) {
   const [activeAction, setActiveAction] = useState<ActionState>(null);
@@ -135,111 +242,39 @@ export function OrderTable({ orders }: { orders: Order[] }) {
           />
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className="w-full table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead>Order ID</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead className="hidden md:table-cell">Date</TableHead>
-                <TableHead className="hidden lg:table-cell">Payment</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
+                <TableHead className="w-[150px] text-left">Order ID</TableHead>
+                <TableHead className="w-[220px] text-left">Customer</TableHead>
+                <TableHead className="hidden md:table-cell w-[150px] text-left">Date</TableHead>
+                <TableHead className="hidden xl:table-cell w-[150px] text-left">Deadline</TableHead> 
+                <TableHead className="hidden lg:table-cell w-[120px] text-left">Payment</TableHead>
+                <TableHead className="w-[140px] text-right">Amount</TableHead>
+                <TableHead className="w-[160px] text-left">Status</TableHead>
+                <TableHead className="w-[80px] text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
-              {filteredOrders.length === 0 ? (
+            
+            {filteredOrders.length === 0 ? (
                 <TableBody>
-                  <TableRow><TableCell colSpan={7} className="text-center h-24">No orders found.</TableCell></TableRow>
+                    <TableRow>
+                        <TableCell colSpan={8} className="text-center h-24">No orders found.</TableCell>
+                    </TableRow>
                 </TableBody>
-              ) : (
-              filteredOrders.map((order) => (
-                <Collapsible asChild key={order.id}>
-                    <tbody className="group/collapsible [&_tr:last-child]:border-0">
-                      <TableRow>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <CollapsibleTrigger asChild>
-                              <Button variant="ghost" size="sm" className="w-9 p-0">
-                                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                              </Button>
-                            </CollapsibleTrigger>
-                            <span>#{order.orderId ? order.orderId.slice(0, 6).toUpperCase() : order.id.slice(0, 6).toUpperCase()}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{order.customer.name}</div>
-                          <div className="hidden text-sm text-muted-foreground sm:block">{order.customer.email}</div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                             {/* Safe date check */}
-                             {order.orderDate?.toDate ? format(order.orderDate.toDate(), 'PPP') : 'Invalid Date'}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">{order.paymentMethod}</TableCell>
-                        <TableCell className="text-right">₹{(order.totalAmount || 0).toFixed(2)}</TableCell>
-                        <TableCell><OrderStatusSelect order={order} /></TableCell>
-                        <TableCell className="text-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={() => setActiveAction({ type: 'edit', order })}>Edit Details</DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive" onSelect={() => setActiveAction({ type: 'delete', order })}>Delete</DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                      
-                      <CollapsibleContent asChild>
-                          <TableRow>
-                              <TableCell colSpan={7} className="p-0">
-                                <div className="p-4 bg-muted/50 grid grid-cols-1 md:grid-cols-3 gap-4">
-                                  {/* ORDER ITEMS SECTION */}
-                                  <div className="md:col-span-2">
-                                    <h4 className="font-bold mb-4 text-sm">Order Items</h4>
-                                    {!order.userId ? (
-                                        <div className="flex items-center gap-2 text-destructive text-sm p-4 border border-destructive/20 rounded-md bg-destructive/10">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <span>
-                                                Error: This order is missing the 'userId' field. 
-                                                System cannot locate order items without the user ID.
-                                            </span>
-                                        </div>
-                                    ) : (
-                                        <OrderItems userId={order.userId} orderId={order.id} />
-                                    )}
-                                  </div>
-
-                                  {/* ADDRESS SECTION */}
-                                  <div className="flex flex-col gap-4">
-                                    <div>
-                                      <h4 className="font-bold mb-2 text-sm">Shipping Address</h4>
-                                      <AddressDisplay address={order.shippingAddress} />
-                                    </div>
-                                    <Separator />
-                                    <div>
-                                      <h4 className="font-bold mb-2 text-sm">Billing Address</h4>
-                                      <AddressDisplay address={order.billingAddress} />
-                                    </div>
-                                    <Separator />
-                                    <div>
-                                        <h4 className="font-bold mb-2 text-sm">Actions</h4>
-                                        <InvoiceButton order={order} />
-                                    </div>
-                                  </div>
-                                </div>
-                              </TableCell>
-                          </TableRow>
-                      </CollapsibleContent>
-                    </tbody>
-                </Collapsible>
-              )))}
+            ) : (
+                filteredOrders.map((order) => (
+                    <OrderRow 
+                        key={order.id} 
+                        order={order} 
+                        setActiveAction={setActiveAction} 
+                    />
+                ))
+            )}
           </Table>
         </CardContent>
       </Card>
       
-      {/* Dialogs */}
       <OrderFormDialog
         open={activeAction?.type === 'edit'}
         onOpenChange={handleDialogClose}
